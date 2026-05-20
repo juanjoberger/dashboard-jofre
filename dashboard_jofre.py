@@ -6,7 +6,7 @@ from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 import urllib.parse
-import re # Nueva herramienta: Expresiones regulares para limpiar textos
+import re
 
 # ==========================================
 # CONFIGURACIÓN (Avanzada)
@@ -44,7 +44,7 @@ def analizar_sentimiento_avanzado(texto):
     else: return "Neutral", promedio
 
 # ==========================================
-# MOTOR DE BÚSQUEDA (Actualizado con variaciones y cuentas)
+# MOTOR DE BÚSQUEDA 
 # ==========================================
 @st.cache_data(ttl=3600)
 def buscar_menciones(query_avanzada, filtro_red_social=None):
@@ -73,7 +73,7 @@ def buscar_menciones(query_avanzada, filtro_red_social=None):
                 
                 # Clasificación de fuente y EXTRACCIÓN DE CUENTA
                 fuente = "Prensa"
-                cuenta = "Medio de Prensa" # Valor por defecto
+                cuenta = "Medio de Prensa" 
                 
                 if "twitter.com" in link or "x.com" in link: 
                     fuente = "X (Twitter)"
@@ -94,18 +94,16 @@ def buscar_menciones(query_avanzada, filtro_red_social=None):
                         
                 elif "facebook.com" in link: 
                     fuente = "Facebook"
-                    # ¡NUEVO! Detectar la cuenta oficial de Facebook
                     cuenta = "LeonardoJofreR" if "leonardojofrer" in link.lower() else "Usuario Facebook"
                     
-                # ¡NUEVO! Detectar Instagram
                 elif "instagram.com" in link:
                     fuente = "Instagram"
-                    cuenta = "@leojofrerios" if "leojofrerios" in link.lower() else "Usuario Instagram"
+                    cuenta = "leojofrerios" if "leojofrerios" in link.lower() else "Usuario Instagram"
                 
                 datos.append({
                     "Fecha": fecha_dt.date(),
                     "Fuente": fuente,
-                    "Cuenta / Autor": cuenta, 
+                    "Cuenta / Autor": cuenta,
                     "Título / Mención": titulo,
                     "Sentimiento": categoria,
                     "Puntaje": puntaje,
@@ -131,7 +129,7 @@ def main():
         # 1. Búsqueda Maestra General (El nombre)
         busqueda_general = '"Leonardo Jofré" OR "Leo Jofré" OR "Leonardo Jofre"'
         
-        # 2. Búsqueda Específica de Rastro (Las cuentas oficiales incluyendo Facebook)
+        # 2. Búsqueda Específica de Rastro (Las cuentas oficiales)
         busqueda_cuentas = '"@LeoJofreRios" OR "@leojofrerios" OR "leojofrerios" OR "LeonardoJofreR"'
         
         # Unimos las búsquedas para darle más alcance a nuestro radar
@@ -143,10 +141,10 @@ def main():
         df_linkedin = buscar_menciones(busqueda_total, "linkedin.com")
         df_ig = buscar_menciones(busqueda_total, "instagram.com")
         
-        # Unimos todo de forma limpia, reiniciamos el índice y ORDENAMOS DE MÁS NUEVO A MÁS VIEJO
+        # Unimos todo, eliminamos duplicados y reiniciamos el índice
         df_total = pd.concat([df_prensa, df_x, df_linkedin, df_ig]).drop_duplicates(subset=['Link']).reset_index(drop=True)
         
-        # ¡ESTA ES LA LÍNEA CLAVE PARA EL MOMENTUM DE LA MARCA!
+        # ORDENAMOS DE MÁS NUEVO A MÁS VIEJO (Momentum)
         df_total = df_total.sort_values(by='Fecha', ascending=False).reset_index(drop=True)
 
     if df_total.empty:
@@ -190,22 +188,31 @@ def main():
 
     st.divider()
 
-    # --- PESTAÑAS DE ANÁLISIS ---
-    # ¡Agregamos una nueva pestaña para el rastro de cuentas oficiales!
-    tab_rastro, tab_redes, tab_prensa, tab_datos = st.tabs(["👣 Rastro Cuentas Oficiales", "📱 Ecosistema Redes", "📰 Medios y Prensa", "🗄️ Base de Datos"])
+    # --- PESTAÑAS DINÁMICAS (Ocultar lo vacío) ---
+    df_social = df_total[df_total['Fuente'].isin(['X (Twitter)', 'LinkedIn', 'Facebook', 'Instagram'])]
+    df_medios = df_total[df_total['Fuente'] == 'Prensa']
     
-    with tab_rastro:
+    nombres_pestanas = ["👣 Rastro Cuentas Oficiales"]
+    
+    if not df_social.empty:
+        nombres_pestanas.append("📱 Ecosistema Redes") 
+        
+    nombres_pestanas.extend(["📰 Medios y Prensa", "🗄️ Base de Datos"])
+    
+    pestanas = st.tabs(nombres_pestanas)
+    indice = 0
+    
+    # PESTAÑA 1: Rastro Oficial
+    with pestanas[indice]:
         st.markdown("### Seguimiento Directo de Perfiles")
         st.markdown("Rastro digital detectado apuntando o proviniendo de **@LeoJofreRios** (X), **@leojofrerios** (IG) y **LeonardoJofreR** (FB). Organizado desde lo más reciente.")
         
-        # Filtramos SOLO los datos que contengan las cuentas exactas de las 3 redes
         filtro_cuentas = df_total['Título / Mención'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False) | df_total['Link'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False)
         df_oficial = df_total[filtro_cuentas]
         
         if not df_oficial.empty:
             st.success(f"Se han detectado {len(df_oficial)} huellas digitales asociadas directamente a los perfiles oficiales.")
             for _, row in df_oficial.head(10).iterrows():
-                # Destacamos visualmente de dónde viene el rastro
                 st.markdown(f"""
                 <div style='padding:10px; border-left: 5px solid #1f77b4; background-color: #f0f2f6; margin-bottom: 10px;'>
                     <strong>{row['Fuente']}</strong> | Fecha: {row['Fecha']} <br>
@@ -215,11 +222,12 @@ def main():
                 """, unsafe_allow_html=True)
         else:
             st.info("El radar no ha detectado indexaciones recientes que mencionen la cuenta exacta (es normal si no ha habido actividad viral reciente en estas cuentas).")
-
-    with tab_redes:
-        # Añadimos Instagram a la visualización de redes
-        df_social = df_total[df_total['Fuente'].isin(['X (Twitter)', 'LinkedIn', 'Facebook', 'Instagram'])]
-        if not df_social.empty:
+            
+    indice += 1 
+    
+    # PESTAÑA 2 (Opcional): Ecosistema Redes
+    if not df_social.empty:
+        with pestanas[indice]:
             col_graf1, col_graf2 = st.columns(2)
             
             with col_graf1:
@@ -240,11 +248,11 @@ def main():
             st.markdown("#### Últimas Interacciones en Redes")
             for _, row in df_social.head(5).iterrows():
                 st.info(f"**{row['Cuenta / Autor']}** en {row['Fuente']} ({row['Fecha']}): [{row['Título / Mención']}]({row['Link']})")
-        else:
-            st.info("No hay menciones indexadas en redes sociales recientemente.")
-
-    with tab_prensa:
-        df_medios = df_total[df_total['Fuente'] == 'Prensa']
+                
+        indice += 1
+        
+    # PESTAÑA 3: Prensa
+    with pestanas[indice]:
         if not df_medios.empty:
             fig_timeline = px.scatter(df_medios, x="Fecha", y="Puntaje", color="Sentimiento",
                                       color_discrete_map={"Positivo":"#00cc96", "Neutral":"gray", "Negativo":"#ff4b4b"},
@@ -254,8 +262,11 @@ def main():
         else:
             st.info("No hay menciones en prensa recientemente.")
             
-    with tab_datos:
-        st.markdown("Base de datos exportable con el algoritmo de sentimiento aplicado.")
+    indice += 1 
+            
+    # PESTAÑA 4: Base de datos
+    with pestanas[indice]:
+        st.markdown("Base de datos exportable con el algoritmo de sentimiento aplicado. (Ordenada por más reciente)")
         st.dataframe(df_total.style.map(
             lambda x: 'background-color: #ffcccc' if x == 'Negativo' else ('background-color: #ccffcc' if x == 'Positivo' else ''),
             subset=['Sentimiento']
