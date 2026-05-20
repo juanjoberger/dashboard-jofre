@@ -218,7 +218,8 @@ def main():
             
     with tab_datos:
         st.markdown("Base de datos exportable con el algoritmo de sentimiento aplicado.")
-        st.dataframe(df_total.style.applymap(
+        # ¡AQUÍ ESTÁ EL CAMBIO! map en lugar de applymap
+        st.dataframe(df_total.style.map(
             lambda x: 'background-color: #ffcccc' if x == 'Negativo' else ('background-color: #ccffcc' if x == 'Positivo' else ''),
             subset=['Sentimiento']
         ))
