@@ -71,11 +71,12 @@ def buscar_menciones(query_avanzada, filtro_red_social=None):
             if fecha_dt.year >= 2024:
                 categoria, puntaje = analizar_sentimiento_avanzado(titulo)
                 
-                # Clasificación de fuente y EXTRACCIÓN DE CUENTA
+                # Clasificación de fuente MEJORADA (Lee link y titulo)
                 fuente = "Prensa"
                 cuenta = "Medio de Prensa" 
+                texto_busqueda = (link + " " + titulo).lower()
                 
-                if "twitter.com" in link or "x.com" in link: 
+                if "twitter.com" in texto_busqueda or "x.com" in texto_busqueda or " en x:" in titulo.lower() or " on x:" in titulo.lower(): 
                     fuente = "X (Twitter)"
                     if " en X:" in titulo:
                         cuenta = titulo.split(" en X:")[0].strip()
@@ -84,7 +85,7 @@ def buscar_menciones(query_avanzada, filtro_red_social=None):
                     else:
                         cuenta = "Usuario X"
                         
-                elif "linkedin.com" in link: 
+                elif "linkedin.com" in texto_busqueda or " | linkedin" in titulo.lower(): 
                     fuente = "LinkedIn"
                     if " | LinkedIn" in titulo:
                         partes = titulo.split(" | LinkedIn")[0].split("-")
@@ -92,13 +93,13 @@ def buscar_menciones(query_avanzada, filtro_red_social=None):
                     else:
                         cuenta = "Usuario LinkedIn"
                         
-                elif "facebook.com" in link: 
+                elif "facebook.com" in texto_busqueda or " - facebook" in titulo.lower(): 
                     fuente = "Facebook"
-                    cuenta = "LeonardoJofreR" if "leonardojofrer" in link.lower() else "Usuario Facebook"
+                    cuenta = "LeonardoJofreR" if "leonardojofrer" in texto_busqueda else "Usuario Facebook"
                     
-                elif "instagram.com" in link:
+                elif "instagram.com" in texto_busqueda or " - instagram" in titulo.lower():
                     fuente = "Instagram"
-                    cuenta = "leojofrerios" if "leojofrerios" in link.lower() else "Usuario Instagram"
+                    cuenta = "leojofrerios" if "leojofrerios" in texto_busqueda else "Usuario Instagram"
                 
                 datos.append({
                     "Fecha": fecha_dt.date(),
@@ -132,19 +133,17 @@ def main():
         # 2. Búsqueda Específica de Rastro (Las cuentas oficiales)
         busqueda_cuentas = '"@LeoJofreRios" OR "@leojofrerios" OR "leojofrerios" OR "LeonardoJofreR"'
         
-        # Unimos las búsquedas para darle más alcance a nuestro radar
+        # Unimos las búsquedas
         busqueda_total = f'({busqueda_general}) OR ({busqueda_cuentas})'
         
-        # 3. Pasamos la búsqueda a nuestras funciones
+        # 3. Extraemos datos
         df_prensa = buscar_menciones(busqueda_total)
         df_x = buscar_menciones(busqueda_total, "twitter.com")
         df_linkedin = buscar_menciones(busqueda_total, "linkedin.com")
         df_ig = buscar_menciones(busqueda_total, "instagram.com")
         
-        # Unimos todo, eliminamos duplicados y reiniciamos el índice
+        # Unimos, eliminamos duplicados y ordenamos de MÁS NUEVO a MÁS VIEJO
         df_total = pd.concat([df_prensa, df_x, df_linkedin, df_ig]).drop_duplicates(subset=['Link']).reset_index(drop=True)
-        
-        # ORDENAMOS DE MÁS NUEVO A MÁS VIEJO (Momentum)
         df_total = df_total.sort_values(by='Fecha', ascending=False).reset_index(drop=True)
 
     if df_total.empty:
@@ -188,7 +187,7 @@ def main():
 
     st.divider()
 
-    # --- PESTAÑAS DINÁMICAS (Ocultar lo vacío) ---
+    # --- PESTAÑAS DINÁMICAS ---
     df_social = df_total[df_total['Fuente'].isin(['X (Twitter)', 'LinkedIn', 'Facebook', 'Instagram'])]
     df_medios = df_total[df_total['Fuente'] == 'Prensa']
     
@@ -202,52 +201,67 @@ def main():
     pestanas = st.tabs(nombres_pestanas)
     indice = 0
     
-    # PESTAÑA 1: Rastro Oficial
+    # PESTAÑA 1: Rastro Oficial (SOLO TERCEROS CON VALORACIÓN)
     with pestanas[indice]:
-        st.markdown("### Seguimiento Directo de Perfiles")
-        st.markdown("Rastro digital detectado apuntando o proviniendo de **@LeoJofreRios** (X), **@leojofrerios** (IG) y **LeonardoJofreR** (FB). Organizado desde lo más reciente.")
+        st.markdown("### Menciones Directas por Terceros")
+        st.markdown("Rastro digital de **terceros** interactuando con **@LeoJofreRios** (X), **@leojofrerios** (IG) y **LeonardoJofreR** (FB). *(Excluye posteos propios)*")
         
         filtro_cuentas = df_total['Título / Mención'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False) | df_total['Link'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False)
-        df_oficial = df_total[filtro_cuentas]
+        # Filtro clave: NO mostrar posteos donde el autor sea el cliente
+        filtro_no_cliente = ~df_total['Cuenta / Autor'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False)
+        
+        df_oficial = df_total[filtro_cuentas & filtro_no_cliente]
         
         if not df_oficial.empty:
-            st.success(f"Se han detectado {len(df_oficial)} huellas digitales asociadas directamente a los perfiles oficiales.")
+            st.success(f"Se han detectado {len(df_oficial)} menciones directas por parte de terceros hacia los perfiles oficiales.")
             for _, row in df_oficial.head(10).iterrows():
+                
+                # Asignamos color según la valoración
+                color_sent = "#00cc96" if row['Sentimiento'] == 'Positivo' else ("#ff4b4b" if row['Sentimiento'] == 'Negativo' else "#7f7f7f")
+                
                 st.markdown(f"""
-                <div style='padding:10px; border-left: 5px solid #1f77b4; background-color: #f0f2f6; margin-bottom: 10px;'>
-                    <strong>{row['Fuente']}</strong> | Fecha: {row['Fecha']} <br>
-                    <i>{row['Título / Mención']}</i> <br>
-                    <a href='{row['Link']}' target='_blank'>🔗 Seguir el rastro a la fuente original</a>
+                <div style='padding:15px; border-left: 6px solid {color_sent}; background-color: #f8f9fa; margin-bottom: 15px; border-radius: 5px;'>
+                    <div style='display: flex; justify-content: space-between; margin-bottom: 8px;'>
+                        <span><strong>{row['Fuente']}</strong> | Fecha: {row['Fecha']}</span>
+                        <span style='color:{color_sent}; font-weight: bold;'>Valoración: {row['Sentimiento']} ({row['Puntaje']:.1f})</span>
+                    </div>
+                    <i style='font-size: 1.1em;'>{row['Título / Mención']}</i> <br><br>
+                    <a href='{row['Link']}' target='_blank' style='text-decoration: none; color: #1f77b4;'>🔗 Ver publicación original</a>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("El radar no ha detectado indexaciones recientes que mencionen la cuenta exacta (es normal si no ha habido actividad viral reciente en estas cuentas).")
+            st.info("No se han detectado interacciones recientes de terceros hacia las cuentas oficiales.")
             
     indice += 1 
     
-    # PESTAÑA 2 (Opcional): Ecosistema Redes
+    # PESTAÑA 2: Ecosistema Redes
     if not df_social.empty:
         with pestanas[indice]:
             col_graf1, col_graf2 = st.columns(2)
             
             with col_graf1:
                 fig_social = px.histogram(df_social, x="Fuente", color="Sentimiento", 
-                                          color_discrete_map={"Positivo":"#00cc96", "Neutral":"gray", "Negativo":"#ff4b4b"},
+                                          color_discrete_map={"Positivo":"#00cc96", "Neutral":"#7f7f7f", "Negativo":"#ff4b4b"},
                                           title="Sentimiento por Red Social")
                 st.plotly_chart(fig_social, use_container_width=True)
                 
             with col_graf2:
-                top_cuentas = df_social['Cuenta / Autor'].value_counts().reset_index().head(5)
+                # Filtramos al cliente del top de cuentas para no mostrar lo "obvio"
+                df_social_otros = df_social[~df_social['Cuenta / Autor'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False)]
+                top_cuentas = df_social_otros['Cuenta / Autor'].value_counts().reset_index().head(5)
                 top_cuentas.columns = ['Cuenta', 'Menciones']
+                
                 fig_cuentas = px.bar(top_cuentas, x='Menciones', y='Cuenta', orientation='h',
-                                     title="Cuentas Principales (Top 5)", color='Menciones',
+                                     title="Top 5: Cuentas de Terceros Más Activas", color='Menciones',
                                      color_continuous_scale='Blues')
                 fig_cuentas.update_layout(yaxis={'categoryorder':'total ascending'})
                 st.plotly_chart(fig_cuentas, use_container_width=True)
             
-            st.markdown("#### Últimas Interacciones en Redes")
+            st.markdown("#### Últimas Interacciones en Redes (Generales)")
             for _, row in df_social.head(5).iterrows():
-                st.info(f"**{row['Cuenta / Autor']}** en {row['Fuente']} ({row['Fecha']}): [{row['Título / Mención']}]({row['Link']})")
+                # Destacar si es positiva o negativa de forma sencilla
+                icono = "🟢" if row['Sentimiento'] == 'Positivo' else ("🔴" if row['Sentimiento'] == 'Negativo' else "⚪")
+                st.info(f"{icono} **{row['Cuenta / Autor']}** en {row['Fuente']} ({row['Fecha']}): [{row['Título / Mención']}]({row['Link']})")
                 
         indice += 1
         
@@ -255,7 +269,7 @@ def main():
     with pestanas[indice]:
         if not df_medios.empty:
             fig_timeline = px.scatter(df_medios, x="Fecha", y="Puntaje", color="Sentimiento",
-                                      color_discrete_map={"Positivo":"#00cc96", "Neutral":"gray", "Negativo":"#ff4b4b"},
+                                      color_discrete_map={"Positivo":"#00cc96", "Neutral":"#7f7f7f", "Negativo":"#ff4b4b"},
                                       size_max=10, hover_data=['Título / Mención'],
                                       title="Línea de Tiempo de Medios (Impacto Positivo/Negativo)")
             st.plotly_chart(fig_timeline, use_container_width=True)
