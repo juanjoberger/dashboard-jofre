@@ -77,7 +77,6 @@ def buscar_menciones(query_avanzada, filtro_red_social=None):
                 
                 if "twitter.com" in link or "x.com" in link: 
                     fuente = "X (Twitter)"
-                    # Extraer usuario de Twitter (Ej: "Juan Perez en X: ...")
                     if " en X:" in titulo:
                         cuenta = titulo.split(" en X:")[0].strip()
                     elif " on X:" in titulo:
@@ -87,7 +86,6 @@ def buscar_menciones(query_avanzada, filtro_red_social=None):
                         
                 elif "linkedin.com" in link: 
                     fuente = "LinkedIn"
-                    # Extraer usuario de LinkedIn (Suele terminar con " | LinkedIn")
                     if " | LinkedIn" in titulo:
                         partes = titulo.split(" | LinkedIn")[0].split("-")
                         cuenta = partes[-1].strip() if len(partes) > 1 else partes[0].strip()
@@ -97,11 +95,16 @@ def buscar_menciones(query_avanzada, filtro_red_social=None):
                 elif "facebook.com" in link: 
                     fuente = "Facebook"
                     cuenta = "Usuario Facebook"
+                    
+                # ¡NUEVO! Detectar Instagram
+                elif "instagram.com" in link:
+                    fuente = "Instagram"
+                    cuenta = "@leojofrerios" if "leojofrerios" in link.lower() else "Usuario Instagram"
                 
                 datos.append({
                     "Fecha": fecha_dt.date(),
                     "Fuente": fuente,
-                    "Cuenta / Autor": cuenta, # ¡Nueva métrica clave!
+                    "Cuenta / Autor": cuenta, 
                     "Título / Mención": titulo,
                     "Sentimiento": categoria,
                     "Puntaje": puntaje,
@@ -123,20 +126,27 @@ def main():
     if st.button("🔄 Actualizar Datos Ahora"):
         st.cache_data.clear()
 
-    with st.spinner('Extrayendo datos de la web y redes sociales...'):
-        # 1. Definimos las combinaciones de nombre usando OR
-        busqueda_maestra = '"Leonardo Jofré" OR "Leo Jofré" OR "Leonardo Jofre" OR "Leo Jofre"'
+    with st.spinner('Rastreando huella digital en web y redes sociales...'):
+        # 1. Búsqueda Maestra General (El nombre)
+        busqueda_general = '"Leonardo Jofré" OR "Leo Jofré" OR "Leonardo Jofre"'
         
-        # 2. Pasamos la búsqueda maestra a nuestras funciones
-        df_prensa = buscar_menciones(busqueda_maestra)
-        df_x = buscar_menciones(busqueda_maestra, "twitter.com")
-        df_linkedin = buscar_menciones(busqueda_maestra, "linkedin.com")
+        # 2. Búsqueda Específica de Rastro (Las cuentas oficiales)
+        busqueda_cuentas = '"@LeoJofreRios" OR "@leojofrerios" OR "leojofrerios"'
         
-        # AQUÍ ESTÁ LA MAGIA: Agregamos .reset_index(drop=True) al final
-        df_total = pd.concat([df_prensa, df_x, df_linkedin]).drop_duplicates(subset=['Link']).reset_index(drop=True)
+        # Unimos las búsquedas para darle más alcance a nuestro radar
+        busqueda_total = f'({busqueda_general}) OR ({busqueda_cuentas})'
+        
+        # 3. Pasamos la búsqueda a nuestras funciones
+        df_prensa = buscar_menciones(busqueda_total)
+        df_x = buscar_menciones(busqueda_total, "twitter.com")
+        df_linkedin = buscar_menciones(busqueda_total, "linkedin.com")
+        df_ig = buscar_menciones(busqueda_total, "instagram.com")
+        
+        # Unimos todo de forma limpia y reiniciamos el índice para evitar errores
+        df_total = pd.concat([df_prensa, df_x, df_linkedin, df_ig]).drop_duplicates(subset=['Link']).reset_index(drop=True)
 
     if df_total.empty:
-        st.warning("No se encontraron menciones recientes para las variaciones de Leonardo Jofré.")
+        st.warning("No se encontraron menciones recientes para las variaciones ni las cuentas de Leonardo Jofré.")
         return
 
     # --- MÉTRICAS DE SALUD DE MARCA ---
@@ -177,10 +187,34 @@ def main():
     st.divider()
 
     # --- PESTAÑAS DE ANÁLISIS ---
-    tab_redes, tab_prensa, tab_datos = st.tabs(["📱 Redes Sociales", "📰 Medios y Prensa", "🗄️ Base de Datos Bruta"])
+    # ¡Agregamos una nueva pestaña para el rastro de cuentas oficiales!
+    tab_rastro, tab_redes, tab_prensa, tab_datos = st.tabs(["👣 Rastro Cuentas Oficiales", "📱 Ecosistema Redes", "📰 Medios y Prensa", "🗄️ Base de Datos"])
     
+    with tab_rastro:
+        st.markdown("### Seguimiento Directo de Perfiles")
+        st.markdown("Rastro digital detectado apuntando o proviniendo de **@LeoJofreRios** (X) y **@leojofrerios** (IG).")
+        
+        # Filtramos SOLO los datos que contengan las cuentas exactas
+        filtro_cuentas = df_total['Título / Mención'].str.contains('LeoJofreRios|leojofrerios', case=False, na=False) | df_total['Link'].str.contains('LeoJofreRios|leojofrerios', case=False, na=False)
+        df_oficial = df_total[filtro_cuentas]
+        
+        if not df_oficial.empty:
+            st.success(f"Se han detectado {len(df_oficial)} huellas digitales asociadas directamente a los perfiles oficiales.")
+            for _, row in df_oficial.head(10).iterrows():
+                # Destacamos visualmente de dónde viene el rastro
+                st.markdown(f"""
+                <div style='padding:10px; border-left: 5px solid #1f77b4; background-color: #f0f2f6; margin-bottom: 10px;'>
+                    <strong>{row['Fuente']}</strong> | Fecha: {row['Fecha']} <br>
+                    <i>{row['Título / Mención']}</i> <br>
+                    <a href='{row['Link']}' target='_blank'>🔗 Seguir el rastro a la fuente original</a>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("El radar no ha detectado indexaciones recientes que mencionen la cuenta exacta (es normal si no ha habido actividad viral reciente en estas cuentas).")
+
     with tab_redes:
-        df_social = df_total[df_total['Fuente'].isin(['X (Twitter)', 'LinkedIn', 'Facebook'])]
+        # Añadimos Instagram a la visualización de redes
+        df_social = df_total[df_total['Fuente'].isin(['X (Twitter)', 'LinkedIn', 'Facebook', 'Instagram'])]
         if not df_social.empty:
             col_graf1, col_graf2 = st.columns(2)
             
@@ -191,7 +225,6 @@ def main():
                 st.plotly_chart(fig_social, use_container_width=True)
                 
             with col_graf2:
-                # NUEVO GRÁFICO: Top Cuentas más activas
                 top_cuentas = df_social['Cuenta / Autor'].value_counts().reset_index().head(5)
                 top_cuentas.columns = ['Cuenta', 'Menciones']
                 fig_cuentas = px.bar(top_cuentas, x='Menciones', y='Cuenta', orientation='h',
@@ -219,7 +252,6 @@ def main():
             
     with tab_datos:
         st.markdown("Base de datos exportable con el algoritmo de sentimiento aplicado.")
-        # ¡AQUÍ ESTÁ EL CAMBIO! map en lugar de applymap
         st.dataframe(df_total.style.map(
             lambda x: 'background-color: #ffcccc' if x == 'Negativo' else ('background-color: #ccffcc' if x == 'Positivo' else ''),
             subset=['Sentimiento']
