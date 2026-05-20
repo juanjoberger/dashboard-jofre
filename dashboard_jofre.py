@@ -94,7 +94,8 @@ def buscar_menciones(query_avanzada, filtro_red_social=None):
                         
                 elif "facebook.com" in link: 
                     fuente = "Facebook"
-                    cuenta = "Usuario Facebook"
+                    # ¡NUEVO! Detectar la cuenta oficial de Facebook
+                    cuenta = "LeonardoJofreR" if "leonardojofrer" in link.lower() else "Usuario Facebook"
                     
                 # ¡NUEVO! Detectar Instagram
                 elif "instagram.com" in link:
@@ -130,8 +131,8 @@ def main():
         # 1. Búsqueda Maestra General (El nombre)
         busqueda_general = '"Leonardo Jofré" OR "Leo Jofré" OR "Leonardo Jofre"'
         
-        # 2. Búsqueda Específica de Rastro (Las cuentas oficiales)
-        busqueda_cuentas = '"@LeoJofreRios" OR "@leojofrerios" OR "leojofrerios"'
+        # 2. Búsqueda Específica de Rastro (Las cuentas oficiales incluyendo Facebook)
+        busqueda_cuentas = '"@LeoJofreRios" OR "@leojofrerios" OR "leojofrerios" OR "LeonardoJofreR"'
         
         # Unimos las búsquedas para darle más alcance a nuestro radar
         busqueda_total = f'({busqueda_general}) OR ({busqueda_cuentas})'
@@ -142,8 +143,11 @@ def main():
         df_linkedin = buscar_menciones(busqueda_total, "linkedin.com")
         df_ig = buscar_menciones(busqueda_total, "instagram.com")
         
-        # Unimos todo de forma limpia y reiniciamos el índice para evitar errores
+        # Unimos todo de forma limpia, reiniciamos el índice y ORDENAMOS DE MÁS NUEVO A MÁS VIEJO
         df_total = pd.concat([df_prensa, df_x, df_linkedin, df_ig]).drop_duplicates(subset=['Link']).reset_index(drop=True)
+        
+        # ¡ESTA ES LA LÍNEA CLAVE PARA EL MOMENTUM DE LA MARCA!
+        df_total = df_total.sort_values(by='Fecha', ascending=False).reset_index(drop=True)
 
     if df_total.empty:
         st.warning("No se encontraron menciones recientes para las variaciones ni las cuentas de Leonardo Jofré.")
@@ -192,10 +196,10 @@ def main():
     
     with tab_rastro:
         st.markdown("### Seguimiento Directo de Perfiles")
-        st.markdown("Rastro digital detectado apuntando o proviniendo de **@LeoJofreRios** (X) y **@leojofrerios** (IG).")
+        st.markdown("Rastro digital detectado apuntando o proviniendo de **@LeoJofreRios** (X), **@leojofrerios** (IG) y **LeonardoJofreR** (FB). Organizado desde lo más reciente.")
         
-        # Filtramos SOLO los datos que contengan las cuentas exactas
-        filtro_cuentas = df_total['Título / Mención'].str.contains('LeoJofreRios|leojofrerios', case=False, na=False) | df_total['Link'].str.contains('LeoJofreRios|leojofrerios', case=False, na=False)
+        # Filtramos SOLO los datos que contengan las cuentas exactas de las 3 redes
+        filtro_cuentas = df_total['Título / Mención'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False) | df_total['Link'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False)
         df_oficial = df_total[filtro_cuentas]
         
         if not df_oficial.empty:
