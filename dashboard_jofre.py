@@ -191,50 +191,17 @@ def main():
     df_social = df_total[df_total['Fuente'].isin(['X (Twitter)', 'LinkedIn', 'Facebook', 'Instagram'])]
     df_medios = df_total[df_total['Fuente'] == 'Prensa']
     
-    nombres_pestanas = ["👣 Rastro Cuentas Oficiales"]
+    nombres_pestanas = []
     
     if not df_social.empty:
         nombres_pestanas.append("📱 Ecosistema Redes") 
         
-    nombres_pestanas.extend(["📰 Medios y Prensa", "🗄️ Base de Datos"])
+    nombres_pestanas.extend(["📰 Medios y Prensa", "🗄️ Base de Datos", "👣 Rastro Cuentas Oficiales"])
     
     pestanas = st.tabs(nombres_pestanas)
     indice = 0
     
-    # PESTAÑA 1: Rastro Oficial (SOLO TERCEROS CON VALORACIÓN)
-    with pestanas[indice]:
-        st.markdown("### Menciones Directas por Terceros")
-        st.markdown("Rastro digital de **terceros** interactuando con **@LeoJofreRios** (X), **@leojofrerios** (IG) y **LeonardoJofreR** (FB). *(Excluye posteos propios)*")
-        
-        filtro_cuentas = df_total['Título / Mención'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False) | df_total['Link'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False)
-        # Filtro clave: NO mostrar posteos donde el autor sea el cliente
-        filtro_no_cliente = ~df_total['Cuenta / Autor'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False)
-        
-        df_oficial = df_total[filtro_cuentas & filtro_no_cliente]
-        
-        if not df_oficial.empty:
-            st.success(f"Se han detectado {len(df_oficial)} menciones directas por parte de terceros hacia los perfiles oficiales.")
-            for _, row in df_oficial.head(10).iterrows():
-                
-                # Asignamos color según la valoración
-                color_sent = "#00cc96" if row['Sentimiento'] == 'Positivo' else ("#ff4b4b" if row['Sentimiento'] == 'Negativo' else "#7f7f7f")
-                
-                st.markdown(f"""
-                <div style='padding:15px; border-left: 6px solid {color_sent}; background-color: #f8f9fa; margin-bottom: 15px; border-radius: 5px;'>
-                    <div style='display: flex; justify-content: space-between; margin-bottom: 8px;'>
-                        <span><strong>{row['Fuente']}</strong> | Fecha: {row['Fecha']}</span>
-                        <span style='color:{color_sent}; font-weight: bold;'>Valoración: {row['Sentimiento']} ({row['Puntaje']:.1f})</span>
-                    </div>
-                    <i style='font-size: 1.1em;'>{row['Título / Mención']}</i> <br><br>
-                    <a href='{row['Link']}' target='_blank' style='text-decoration: none; color: #1f77b4;'>🔗 Ver publicación original</a>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("No se han detectado interacciones recientes de terceros hacia las cuentas oficiales.")
-            
-    indice += 1 
-    
-    # PESTAÑA 2: Ecosistema Redes
+    # PESTAÑA 1 (Opcional): Ecosistema Redes
     if not df_social.empty:
         with pestanas[indice]:
             col_graf1, col_graf2 = st.columns(2)
@@ -264,8 +231,8 @@ def main():
                 st.info(f"{icono} **{row['Cuenta / Autor']}** en {row['Fuente']} ({row['Fecha']}): [{row['Título / Mención']}]({row['Link']})")
                 
         indice += 1
-        
-    # PESTAÑA 3: Prensa
+
+    # PESTAÑA 2: Prensa
     with pestanas[indice]:
         if not df_medios.empty:
             fig_timeline = px.scatter(df_medios, x="Fecha", y="Puntaje", color="Sentimiento",
@@ -278,13 +245,46 @@ def main():
             
     indice += 1 
             
-    # PESTAÑA 4: Base de datos
+    # PESTAÑA 3: Base de datos
     with pestanas[indice]:
         st.markdown("Base de datos exportable con el algoritmo de sentimiento aplicado. (Ordenada por más reciente)")
         st.dataframe(df_total.style.map(
             lambda x: 'background-color: #ffcccc' if x == 'Negativo' else ('background-color: #ccffcc' if x == 'Positivo' else ''),
             subset=['Sentimiento']
         ))
+
+    indice += 1
+
+    # PESTAÑA 4: Rastro Oficial (SOLO TERCEROS CON VALORACIÓN)
+    with pestanas[indice]:
+        st.markdown("### Menciones Directas por Terceros")
+        st.markdown("Rastro digital de **terceros** interactuando con **@LeoJofreRios** (X), **@leojofrerios** (IG) y **LeonardoJofreR** (FB). *(Excluye posteos propios)*")
+        
+        filtro_cuentas = df_total['Título / Mención'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False) | df_total['Link'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False)
+        # Filtro clave: NO mostrar posteos donde el autor sea el cliente
+        filtro_no_cliente = ~df_total['Cuenta / Autor'].str.contains('LeoJofreRios|leojofrerios|LeonardoJofreR', case=False, na=False)
+        
+        df_oficial = df_total[filtro_cuentas & filtro_no_cliente]
+        
+        if not df_oficial.empty:
+            st.success(f"Se han detectado {len(df_oficial)} menciones directas por parte de terceros hacia los perfiles oficiales.")
+            for _, row in df_oficial.head(10).iterrows():
+                
+                # Asignamos color según la valoración
+                color_sent = "#00cc96" if row['Sentimiento'] == 'Positivo' else ("#ff4b4b" if row['Sentimiento'] == 'Negativo' else "#7f7f7f")
+                
+                st.markdown(f"""
+                <div style='padding:15px; border-left: 6px solid {color_sent}; background-color: #f8f9fa; margin-bottom: 15px; border-radius: 5px;'>
+                    <div style='display: flex; justify-content: space-between; margin-bottom: 8px;'>
+                        <span><strong>{row['Fuente']}</strong> | Fecha: {row['Fecha']}</span>
+                        <span style='color:{color_sent}; font-weight: bold;'>Valoración: {row['Sentimiento']} ({row['Puntaje']:.1f})</span>
+                    </div>
+                    <i style='font-size: 1.1em;'>{row['Título / Mención']}</i> <br><br>
+                    <a href='{row['Link']}' target='_blank' style='text-decoration: none; color: #1f77b4;'>🔗 Ver publicación original</a>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No se han detectado interacciones recientes de terceros hacia las cuentas oficiales.")
 
 if __name__ == "__main__":
     main()
