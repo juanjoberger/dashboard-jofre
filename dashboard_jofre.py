@@ -132,7 +132,8 @@ def main():
         df_x = buscar_menciones(busqueda_maestra, "twitter.com")
         df_linkedin = buscar_menciones(busqueda_maestra, "linkedin.com")
         
-        df_total = pd.concat([df_prensa, df_x, df_linkedin]).drop_duplicates(subset=['Link'])
+        # AQUÍ ESTÁ LA MAGIA: Agregamos .reset_index(drop=True) al final
+        df_total = pd.concat([df_prensa, df_x, df_linkedin]).drop_duplicates(subset=['Link']).reset_index(drop=True)
 
     if df_total.empty:
         st.warning("No se encontraron menciones recientes para las variaciones de Leonardo Jofré.")
